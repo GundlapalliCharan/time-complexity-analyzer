@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Time Complexity Calculator</title>
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f3f4f6; /* Light gray background */
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            padding: 1rem; /* Add some padding for smaller screens */
+        }
+        .container {
+            background-color: #ffffff;
+            border-radius: 1rem; /* Rounded corners */
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05); /* Subtle shadow */
+            padding: 2rem;
+            max-width: 900px; /* Max width for larger screens */
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+        }
+        textarea {
+            min-height: 250px; /* Sufficient height for code input */
+            resize: vertical; /* Allow vertical resizing */
+        }
+        /* Custom scrollbar for textarea */
+        textarea::-webkit-scrollbar {
+            width: 8px;
+        }
+        textarea::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 10px;
+        }
+        textarea::-webkit-scrollbar-thumb {
+            background: #888;
+            border-radius: 10px;
+        }
+        textarea::-webkit-scrollbar-thumb:hover {
+            background: #555;
+        }
+        .loading-spinner {
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-top: 4px solid #fff;
+            border-radius: 50%;
+            width: 24px;
+            height: 24px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="text-3xl font-bold text-center text-gray-800 mb-4">Time Complexity Analyzer</h1>
+
+        <div class="flex flex-col gap-2">
+            <label for="code-input" class="text-lg font-semibold text-gray-700">Enter your code here:</label>
+            <textarea
+                id="code-input"
+                class="w-full p-4 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-gray-800 bg-gray-50"
+                placeholder="Paste your code (e.g., Python, JavaScript, C++, Java)"
+            ></textarea>
+        </div>
+
+        <button
+            id="calculate-button"
+            class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-lg transition duration-300 ease-in-out transform hover:scale-105 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-opacity-50 shadow-lg flex items-center justify-center"
+        >
+            <span id="button-text">Analyze Time Complexity</span>
+            <div id="loading-spinner" class="loading-spinner ml-3 hidden"></div>
+        </button>
+
+        <div id="result-area" class="mt-4 p-4 bg-gray-100 border border-gray-200 rounded-lg hidden">
+            <h2 class="text-xl font-semibold text-gray-700 mb-2">Analysis Result:</h2>
+            <p id="complexity-output" class="text-gray-800 text-lg"></p>
+        </div>
+    </div>
+
+    <script>
+        document.getElementById('calculate-button').addEventListener('click', async () => {
+            const code = document.getElementById('code-input').value;
+            const resultArea = document.getElementById('result-area');
+            const complexityOutput = document.getElementById('complexity-output');
+            const calculateButton = document.getElementById('calculate-button');
+            const buttonText = document.getElementById('button-text');
+            const loadingSpinner = document.getElementById('loading-spinner');
+
+            // Reset result area styling
+            resultArea.classList.remove('bg-red-100', 'border-red-200', 'bg-green-100', 'border-green-200');
+            resultArea.classList.add('bg-gray-100', 'border-gray-200');
+
+            if (code.trim() === '') {
+                complexityOutput.textContent = 'Please enter some code to analyze.';
+                resultArea.classList.remove('hidden');
+                resultArea.classList.add('bg-red-100', 'border-red-200'); // Indicate error
+                return;
+            }
+
+            // Show loading state
+            buttonText.textContent = 'Analyzing...';
+            loadingSpinner.classList.remove('hidden');
+            calculateButton.disabled = true;
+            resultArea.classList.remove('hidden');
+            complexityOutput.textContent = 'Analyzing your code... Please wait.';
+
+            try {
+                // Prepare the prompt for the LLM
+                let chatHistory = [];
+                const prompt = `Analyze the following code and determine its time complexity in Big O notation. Provide only the Big O notation and a very brief explanation (1-2 sentences) of why, focusing on the dominant operations. If the code is not valid or cannot be analyzed, state that.
+
+Code:
+\`\`\`
+${code}
+\`\`\`
+
+Example Output:
+O(N) - The loop iterates N times.
+O(N^2) - Nested loops iterate N*N times.
+O(log N) - Binary search halves the search space in each step.
+O(1) - Constant time operations.
+`;
+                chatHistory.push({ role: "user", parts: [{ text: prompt }] });
+
+                const payload = { contents: chatHistory };
+                const apiKey = ""; // Canvas will automatically provide this
+                const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${apiKey}`;
+
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const result = await response.json();
+
+                if (result.candidates && result.candidates.length > 0 &&
+                    result.candidates[0].content && result.candidates[0].content.parts &&
+                    result.candidates[0].content.parts.length > 0) {
+                    const analysisText = result.candidates[0].content.parts[0].text;
+                    complexityOutput.textContent = analysisText;
+                    resultArea.classList.add('bg-green-100', 'border-green-200'); // Indicate success
+                } else {
+                    console.error('Unexpected API response structure:', result);
+                    complexityOutput.textContent = 'Failed to get analysis from the backend. Please try again.';
+                    resultArea.classList.add('bg-red-100', 'border-red-200'); // Indicate error
+                }
+
+            } catch (error) {
+                console.error('Error during API call:', error);
+                complexityOutput.textContent = 'An error occurred while analyzing the code. Please check your network connection or try again later.';
+                resultArea.classList.add('bg-red-100', 'border-red-200'); // Indicate error
+                } finally {
+                // Hide loading state
+                buttonText.textContent = 'Analyze Time Complexity';
+                loadingSpinner.classList.add('hidden');
+                calculateButton.disabled = false;
+            }
+        });
+    </script>
+</body>
+</html>
